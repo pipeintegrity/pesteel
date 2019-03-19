@@ -37,6 +37,7 @@ gdist_all$MATERIAL_INVOLVED <- revalue(gdist_all$MATERIAL_INVOLVED,c("POLYETHELE
 gdist_all %>% filter(FF=="NO",SYSTEM_PART_INVOLVED=="MAIN") %>% group_by(MATERIAL_INVOLVED) %>% count()
 pesteel <- gdist_all %>% filter(MATERIAL_INVOLVED=="PE"|MATERIAL_INVOLVED=="STEEL", SYSTEM_PART_INVOLVED=="MAIN",FF=="NO")
 pesteel <- pesteel %>% mutate(CoF=FATAL*10E6+INJURE*10E6/3+TOTAL_COST_CURRENT)
+pesteel$RELEASE_TYPE <- ifelse(pesteel$RELEASE_TYPE=="N/A",NA, pesteel$RELEASE_TYPE)
 pesteel
 
 byyear <- pesteel %>% group_by(year,MATERIAL_INVOLVED) %>% summarise(fatal=sum(FATAL), injure=sum(INJURE), CoF=sum(CoF))
@@ -76,7 +77,22 @@ ggplot(filter(pesteel,MAP_SUBCAUSE!="THIRD PARTY EXCAVATION DAMAGE"), aes(MAP_SU
   geom_bar(aes(fill=MATERIAL_INVOLVED),col='black',position = "dodge")+
   theme_bw(16,"serif")+
   theme(axis.text.x = element_text(angle = -45,hjust = 0),legend.position = c(0.90,0.85),legend.background = element_rect(color = 'black'),plot.margin=margin(2,6,2,1,"cm"))+
-  labs(title = "Incident Count by Sub-Cause and Material Type", subtitle = "PHMSA incident data 2004 - 2019 (Excluding Excavation Damage)",x= "Mapped Sub-Cause", y="Count")
+  labs(title = "Incident Count by Sub-Cause and Material Type", subtitle = "PHMSA incident data 2004 - 2019 (Excluding Excavation Damage)",x= "Mapped Sub-Cause", y="Count") + guides(fill=guide_legend(title = "Material"))
+
+#relaease type plot ####
+int_breaks <- function(x, n = 5) pretty(x, n)[pretty(x, n) %% 1 == 0]
+
+ggplot(pesteel, aes(RELEASE_TYPE))+
+  geom_bar(aes(fill=MATERIAL_INVOLVED),col='black',position = "dodge", alpha=0.95)+
+  theme_bw(18,"serif")+
+  theme(axis.text.x = element_text(angle = -30,hjust = 0, size = rel(0.75)),
+        legend.position = c(0.90,0.05),legend.background = element_rect(color = 'black'),
+        plot.margin=margin(1,1,1,1,"cm"), axis.title.x = element_text(size=rel(1.5)))+
+  labs(title = "Incident Count by Cause and Material Type", 
+       subtitle = "PHMSA Distribution Incident Data (2004 - 2019)",x= "Release Type", y="Count", caption = "Incidents on mains only, excluding \"fire first\" incidents\n Note varying y-scales ")+
+  scale_fill_brewer(palette = "Set1", type = "div")+ 
+  guides(fill=guide_legend(title = "Material"))+facet_wrap(~MAP_CAUSE, scales = "free_y")+
+  scale_y_continuous(breaks= int_breaks )
 
 
 #MCMC Analysis of PE and Steel CoF
