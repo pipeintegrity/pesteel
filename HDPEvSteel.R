@@ -4,7 +4,7 @@ library(readxl)
 library(plyr)
 library(tidyverse)
 library(lubridate)
-
+library(reshape2)
 
 
 gdist10 <- gd2010toPresent <- read_excel("gd2010toPresent.xlsx", 
@@ -40,7 +40,8 @@ pesteel <- pesteel %>% mutate(CoF=FATAL*10E6+INJURE*10E6/3+TOTAL_COST_CURRENT)
 pesteel$RELEASE_TYPE <- ifelse(pesteel$RELEASE_TYPE=="N/A",NA, pesteel$RELEASE_TYPE)
 pesteel
 
-byyear <- pesteel %>% group_by(year,MATERIAL_INVOLVED) %>% summarise(fatal=sum(FATAL), injure=sum(INJURE), CoF=sum(CoF))
+byyear <- pesteel %>% filter(year>2003 & year<2019) %>% group_by(year,MATERIAL_INVOLVED) %>% summarise(fatal=sum(FATAL), injure=sum(INJURE), CoF=sum(CoF), n=length(SERIOUS))
+count_cause <- pesteel %>% group_by(MATERIAL_INVOLVED, year, MAP_CAUSE) %>% count()
 
 ggplot(pesteel, aes(CoF))+
   geom_histogram(aes(fill=MATERIAL_INVOLVED),col='black')+
@@ -104,3 +105,54 @@ best_pest <- BESTmcmc(log10( pesteel_fil$CoF[which(x = pesteel_fil$MATERIAL_INVO
 plotPost(best_pest$mu1 - best_pest$mu2, compVal = 0, xlab = bquote(mu[Steel] - mu[PE]), 
          cex.lab = 1.75, main = "Difference of Mean CoF", 
          col = "skyblue2")
+
+#mileage annual report data ####
+gd2017 <- read_excel("annual_gas_distribution_2017.xlsx", skip = 2)
+gd2016 <- read_excel("annual_gas_distribution_2016.xlsx", skip = 2)
+gd2015 <- read_excel("annual_gas_distribution_2015.xlsx", skip = 2)
+gd2014 <- read_excel("annual_gas_distribution_2014.xlsx", skip = 2)
+gd2013 <- read_excel("annual_gas_distribution_2013.xlsx", skip = 2)
+gd2012 <- read_excel("annual_gas_distribution_2012.xlsx", skip = 2)
+gd2011 <- read_excel("annual_gas_distribution_2011.xlsx", skip = 2)
+gd2010 <- read_excel("annual_gas_distribution_2010.xlsx", skip = 2)
+gd2009 <- read_excel("annual_gas_distribution_2009.xlsx")
+gd2008 <- read_excel("annual_gas_distribution_2008.xlsx")
+gd2007 <- read_excel("annual_gas_distribution_2007.xlsx")
+gd2006 <- read_excel("annual_gas_distribution_2006.xlsx")
+gd2005 <- read_excel("annual_gas_distribution_2005.xlsx")
+gd2004 <- read_excel("annual_gas_distribution_2004.xlsx")
+
+gd2004 <- gd2004[,1:224]
+gd2005 <- gd2005[,1:224]
+gd2006 <- gd2006[,1:224]
+gd2007 <- gd2007[,1:224]
+gd2008 <- gd2008[,1:224]
+gd2009 <- gd2009[,1:224]
+
+bind0409 <- bind_rows(gd2004,gd2005,gd2006,gd2007,gd2008,gd2009)
+bind10 <- bind_rows(gd2010, gd2011, gd2012, gd2013, gd2014, gd2015, gd2016, gd2017)
+
+yrmiles10 <- bind10 %>% group_by(REPORT_YEAR) %>% 
+  summarise(pemiles=sum(MMILES_PE_TOTAL, na.rm = T),
+            steelmiles=sum(MMILES_STEEL_TOTAL, na.rm=T)) %>% arrange(REPORT_YEAR)
+
+yrmiles0409 <- bind0409 %>% group_by(YR) %>% 
+  summarise(pemiles=sum(PEMT,na.rm = T), steelmiles=sum(STMT, na.rm=T)) %>% arrange(YR)
+
+names(yrmiles10)[1] <- "year"
+names(yrmiles0409)[1] <- "year"
+yrbind <- bind_rows(yrmiles10, yrmiles0409)
+yrmmelt <- melt(yrbind,id.vars = 1)
+names(byyear)[2] <- "material"
+yrmmelt$material <- toupper(yrmmelt$material)
+
+#marry up the two data sets
+milejoin <- byyear %>% left_join(yrmmelt,by=c("year","material") )
+milejoin$value[30] <- milejoin$value[28]
+milejoin$value[29] <- milejoin$value[27]
+milejoin <- milejoin[,-7]
+names(milejoin)[7] <- "miles"
+
+milejoin <- milejoin %>% mutate(incident_mile=n/miles)
+
+ggplot(milejoin, aes(year,incident_mile*1000))+geom_bar(stat = "identity", aes(fill=material), alpha=0.9, position = "dodge")+theme_bw(16,"serif")+scale_x_continuous(breaks = seq(2004,2018,by=2))+scale_fill_brewer(palette = "Set1")+labs(title = "Incidents per 1,000 Miles of Main by Material", x="Year", y="Incidents/1,000 Miles of Main", caption="PHMSA Distribution incident data (2004-2018) \n excluding \"Fire First\" incidents")+theme(plot.margin = margin(0.6,0.6,0.6,0.6,"cm"))
