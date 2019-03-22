@@ -42,7 +42,7 @@ pesteel
 
 byyear <- pesteel %>% filter(year>2003 & year<2019) %>% group_by(year,MATERIAL_INVOLVED) %>% summarise(fatal=sum(FATAL), injure=sum(INJURE), CoF=sum(CoF), n=length(SERIOUS))
 count_cause <- pesteel %>% group_by(MATERIAL_INVOLVED, year, MAP_CAUSE) %>% count()
-
+names(count_cause)[1] <- "material"
 ggplot(pesteel, aes(CoF))+
   geom_histogram(aes(fill=MATERIAL_INVOLVED),col='black')+
   facet_grid(~MATERIAL_INVOLVED)+
@@ -144,6 +144,7 @@ names(yrmiles0409)[1] <- "year"
 yrbind <- bind_rows(yrmiles10, yrmiles0409)
 yrmmelt <- melt(yrbind,id.vars = 1)
 names(byyear)[2] <- "material"
+yrmmelt$material <- ifelse(yrmmelt$variable=="pemiles","PE","STEEL")
 yrmmelt$material <- toupper(yrmmelt$material)
 
 #marry up the two data sets
@@ -155,4 +156,18 @@ names(milejoin)[7] <- "miles"
 
 milejoin <- milejoin %>% mutate(incident_mile=n/miles)
 
+countmile <- count_cause %>% filter(year<2019 & year>2003)%>% left_join(yrmmelt,by=c("year","material") )
+countmile <- countmile[,-5]
+countmile$value[63:67] <- 724020.4 #use 2017 miles for 2018 for now until annual report data published for 2018
+countmile$value[145:150] <- 531629.6  #use 2017 miles for 2018 for now
+colnames(countmile)[5] <- "miles"
+countmile <- countmile %>% mutate(rate=n/miles)
+
+#incident/mile by threat ####
+threat_rate <- countmile %>% group_by(material, MAP_CAUSE) %>% summarise(avg_rate=mean(rate))
+                
 ggplot(milejoin, aes(year,incident_mile*1000))+geom_bar(stat = "identity", aes(fill=material), alpha=0.9, position = "dodge")+theme_bw(16,"serif")+scale_x_continuous(breaks = seq(2004,2018,by=2))+scale_fill_brewer(palette = "Set1")+labs(title = "Incidents per 1,000 Miles of Main by Material", x="Year", y="Incidents/1,000 Miles of Main", caption="PHMSA Distribution incident data (2004-2018) \n excluding \"Fire First\" incidents")+theme(plot.margin = margin(0.6,0.6,0.6,0.6,"cm"))
+
+#plot incident/mile by threat####
+
+ggplot(threat_rate, aes(MAP_CAUSE,avg_rate*1000))+geom_bar(stat = "identity", aes(fill=material), alpha=0.9, position = "dodge")+theme_bw(16,"serif")+scale_fill_brewer(palette = "Set1")+labs(title = "Average Incidents per 1,000 Miles of Main by Material", x="Map Cause", y="Avg. Incidents/1,000 Miles of Main", caption="PHMSA Distribution incident data (2004-2018) \n mains only, excluding \"Fire First\" incidents")+theme(plot.margin = margin(0.6,2.85,0.6,0.6,"cm"), axis.text.x = element_text(angle = -30,hjust = 0, size=rel(0.75)), legend.position = c(0.85,0.85), legend.background = element_rect(color='black'))
